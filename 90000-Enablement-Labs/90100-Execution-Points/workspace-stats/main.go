@@ -167,9 +167,9 @@ func main() {
 	fmt.Printf("\n📊 Workspace Statistics: %s\n", absRoot)
 	fmt.Println(strings.Repeat("-", 50))
 
-	// Root Silo Summary
+	// Taxonomy Breakdown
 	if len(siloStatsMap) > 0 {
-		fmt.Println("\n🏛️  Sovereign Silo Summary (nnnnn / Cnnnn):")
+		fmt.Println("\n🏛️  Taxonomy Breakdown (nnnnn / Cnnnn):")
 		var sortedSilos []string
 		for k := range siloStatsMap {
 			sortedSilos = append(sortedSilos, k)
