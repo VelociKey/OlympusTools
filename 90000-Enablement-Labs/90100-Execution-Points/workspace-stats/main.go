@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"unicode"
 )
 
 type Stats struct {
@@ -27,6 +28,44 @@ type ExtensionCount struct {
 	Count int
 }
 
+type SiloStats struct {
+	Name       string
+	TotalFiles int
+	ExtCounts  map[string]int
+}
+
+func isSiloName(name string) bool {
+	if len(name) < 5 {
+		return false
+	}
+
+	// Check for nnnnn
+	allDigits := true
+	for i := 0; i < 5; i++ {
+		if !unicode.IsDigit(rune(name[i])) {
+			allDigits = false
+			break
+		}
+	}
+	if allDigits {
+		return true
+	}
+
+	// Check for Cnnnn
+	if (name[0] == 'C' || name[0] == 'c') && len(name) >= 5 {
+		allDigits = true
+		for i := 1; i < 5; i++ {
+			if !unicode.IsDigit(rune(name[i])) {
+				allDigits = false
+				break
+			}
+		}
+		return allDigits
+	}
+
+	return false
+}
+
 func main() {
 	workspace := flag.String("workspace", ".", "Path to scan")
 	maxDepth := flag.Int("depth", 3, "Maximum tree depth")
@@ -40,6 +79,7 @@ func main() {
 
 	rootStats := newStats()
 	extCounts := make(map[string]int)
+	siloStatsMap := make(map[string]*SiloStats)
 
 	absRoot, err := filepath.Abs(*workspace)
 	if err != nil {
@@ -58,7 +98,7 @@ func main() {
 		}
 
 		parts := strings.Split(rel, string(filepath.Separator))
-		
+
 		// Check exclusions
 		for _, part := range parts {
 			if excludeMap[part] {
@@ -80,10 +120,25 @@ func main() {
 		}
 		extCounts[ext]++
 
+		// Update root-level silo stats
+		if len(parts) > 0 {
+			rootPart := parts[0]
+			if isSiloName(rootPart) {
+				if _, ok := siloStatsMap[rootPart]; !ok {
+					siloStatsMap[rootPart] = &SiloStats{
+						Name:      rootPart,
+						ExtCounts: make(map[string]int),
+					}
+				}
+				siloStatsMap[rootPart].TotalFiles++
+				siloStatsMap[rootPart].ExtCounts[ext]++
+			}
+		}
+
 		// Update tree stats
 		curr := rootStats
 		curr.TotalFiles++
-		
+
 		for i, part := range parts {
 			if i >= *maxDepth {
 				break
@@ -93,7 +148,7 @@ func main() {
 				curr.LocalFiles++
 				break
 			}
-			
+
 			if _, ok := curr.SubDirs[part]; !ok {
 				curr.SubDirs[part] = newStats()
 			}
@@ -112,10 +167,42 @@ func main() {
 	fmt.Printf("\n📊 Workspace Statistics: %s\n", absRoot)
 	fmt.Println(strings.Repeat("-", 50))
 
+	// Root Silo Summary
+	if len(siloStatsMap) > 0 {
+		fmt.Println("\n🏛️  Sovereign Silo Summary (nnnnn / Cnnnn):")
+		var sortedSilos []string
+		for k := range siloStatsMap {
+			sortedSilos = append(sortedSilos, k)
+		}
+		sort.Strings(sortedSilos)
+
+		for _, name := range sortedSilos {
+			s := siloStatsMap[name]
+			fmt.Printf("  ├── %s (%d files)\n", name, s.TotalFiles)
+			
+			// Show top 3 extensions for this silo
+			type extCount struct {
+				ext string
+				val int
+			}
+			var siloExts []extCount
+			for ext, count := range s.ExtCounts {
+				siloExts = append(siloExts, extCount{ext, count})
+			}
+			sort.Slice(siloExts, func(i, j int) bool {
+				return siloExts[i].val > siloExts[j].val
+			})
+			
+			for i := 0; i < len(siloExts) && i < 3; i++ {
+				fmt.Printf("  │   - %-12s : %d\n", siloExts[i].ext, siloExts[i].val)
+			}
+		}
+	}
+
 	fmt.Println("\n📂 Directory Tree (Recursive Counts):")
 	printTree(rootStats, "", 0, *maxDepth)
 
-	fmt.Println("\n📄 File Type Breakdown:")
+	fmt.Println("\n📄 Global File Type Breakdown:")
 	var sortedExts []ExtensionCount
 	for ext, count := range extCounts {
 		sortedExts = append(sortedExts, ExtensionCount{ext, count})
