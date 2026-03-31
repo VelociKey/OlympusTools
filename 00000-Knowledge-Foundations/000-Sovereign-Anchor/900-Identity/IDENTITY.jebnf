@@ -1,0 +1,5 @@
+::Sovereign::Fabric::Identity::v1
+URI "silo://00SDLC/OlympusTools"
+Label "Olympus Tools"
+Silo "00SDLC"
+Workspace "OlympusTools"
